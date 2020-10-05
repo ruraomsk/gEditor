@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>dropAndCreate.sql</file>
+        <file>gEditor.ini</file>
+    </qresource>
+</RCC>

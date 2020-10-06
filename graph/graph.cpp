@@ -1,8 +1,5 @@
 #include "graph.h"
 
-#include <QJsonDocument>
-#include <QJsonParseError>
-#include <QSqlQuery>
 
 
 Graph::Graph(int region)
@@ -48,6 +45,7 @@ Graph::Graph(int region)
     foreach (auto c, lc) {
         if(!vertexes.contains(c.getCode().toULong())) {
             protocol.append("Перекресток "+c.toString()+" отсутствует в графе");
+            error=true;
             continue;
         }
         auto v=vertexes[c.getCode().toULong()];
@@ -58,6 +56,7 @@ Graph::Graph(int region)
     foreach (auto v, vertexes) {
         if (!v->correct){
             protocol.append("Вершина "+v->toString()+" отсутствует в перечне перекрестков");
+            error=true;
             continue;
         }
         v->correct=false;
@@ -78,11 +77,12 @@ Graph::Graph(int region)
                     list.append(e->toString()+" ");
                 }
                 protocol.append(list+" есть дубликаты ");
+                error=true;
                 break;
             }
         }
     }
-    controlGraph();
+    if (!controlGraph()) error=true;
 }
 
 bool Graph::addVertex(Vertex *vertex)
@@ -124,25 +124,69 @@ bool Graph::addEdge(Edge *edge)
 bool Graph::controlGraph()
 {
     //Проверим граф на связность
-    QMap<ulong,QList<ulong>> g;
+    g.clear();
+    QMap<ulong,bool> used;
     QList<ulong> l;
+    ulong first=0;
     //Грузим вершины
     foreach (auto v, vertexes) {
         g[v->longid]=l;
+        used[v->longid]=false;
+        if (first==0) first=v->longid;
     }
     //Теперь графы
     foreach (auto en, edges.keys()) {
         foreach (auto e, edges[en]) {
-            appendSingle(&g,e);
+            appendSingle(e);
         }
     }
-    return true;
+    QQueue<ulong> q;
+    q.push_back(first);
+    used[first]=true;
+    while (!q.empty()){
+        ulong v=q.front();
+        q.pop_front();
+        foreach (ulong to, g[v]) {
+            if(!used[to]){
+                used[to]=true;
+                q.push_back(to);
+            }
+        }
+    }
+    bool error=false;
+    foreach (auto i, used.keys()) {
+        if(!used[i]){
+            protocol.append(QString::asprintf("Вершина %ld не в связанном графе",i));
+            error=true;
+        }
+    }
+    return !error;
 }
 
-void Graph::appendSingle(QMap<ulong, QList<ulong> > *g, Edge *edge)
+void Graph::appendSingle( Edge *edge)
 {
-    auto l=g[edge->outid];
+    QList<ulong> l=g[edge->outid];
     bool is=false;
     foreach (auto v, l) {
+        if (v==edge->inid) {
+            is=true;
+            break;
+        }
+    }
+    if (!is){
+        l.append(edge->inid);
+        g[edge->outid]=l;
+    }
+    is=false;
+    l=g[edge->inid];
+    foreach (auto v, l) {
+        if (v==edge->outid) {
+            is=true;
+            break;
+        }
+    }
+    if (!is){
+        l.append(edge->outid);
+        g[edge->inid]=l;
     }
 }
